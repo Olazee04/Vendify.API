@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".dockerignore" />
+  </Folder>
+  <Project Path="Vendify.API/Vendify.API.csproj" />
+  <Project Path="Vendify.Application/Vendify.Application.csproj" Id="43e12381-0f71-422f-97b5-da7923777fd7" />
+  <Project Path="Vendify.Core/Vendify.Core.csproj" Id="6b1ffe7b-acba-4dbf-8d03-2fc8122e1242" />
+  <Project Path="Vendify.Infrastructure/Vendify.Infrastructure.csproj" Id="e7a14372-3b1e-4461-b530-0133572ca8ea" />
+  <Project Path="Vendify.Shared/Vendify.Shared.csproj" Id="d491f803-390d-4fac-aa32-f0bf00e70a88" />
+</Solution>
