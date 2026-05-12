@@ -140,10 +140,23 @@ var app = builder.Build();
 
 // ── Auto-run migrations on startup ───────────────────────
 using (var scope = app.Services.CreateScope())
+
+// ── Auto-run migrations on startup ───────────────────────
+// ── Auto-run migrations on startup ───────────────────────
+using (var migrationScope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider
-        .GetRequiredService<VendifyDbContext>();
-    db.Database.Migrate();
+    try
+    {
+        var db = migrationScope.ServiceProvider
+            .GetRequiredService<VendifyDbContext>();
+        db.Database.Migrate();
+        Console.WriteLine("✅ Database migrations applied successfully");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"⚠️ Migration warning: {ex.Message}");
+        Console.WriteLine("App will continue — check DB connection");
+    }
 }
 
 // ── Middleware ───────────────────────────────────────────
