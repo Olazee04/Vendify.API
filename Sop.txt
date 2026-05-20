@@ -1,0 +1,29 @@
+STATEMENT OF PURPOSE
+
+My decision to pursue postgraduate study in Applied Software Engineering is driven by a clear professional goal: to develop the advanced technical and architectural expertise required to design scalable, secure, and reliable software systems capable of solving real-world digital infrastructure challenges.
+
+
+I earned my Bachelor’s degree in Computer Science, where I developed a solid foundation in programming, software development principles, algorithms, and system design. Although my final academic result did not fully reflect my potential, it became an important turning point that strengthened my discipline, resilience, and determination to grow professionally. Since graduation, I have focused intentionally on building practical technical competence through professional experience and continuous self-development.
+
+
+I currently work as a Junior Fullstack Developer Intern at RMSysolution, where I contribute to software development projects involving backend system design using C#, ASP.NET Web API, and modern web technologies. My responsibilities include implementing backend logic, developing and maintaining APIs, debugging applications, collaborating with development teams, and contributing to scalable application development workflows.
+
+
+This professional experience has significantly deepened my understanding of enterprise software systems and exposed me to practical challenges such as system maintainability, performance optimization, scalability, and secure application architecture. Through these experiences, I have developed strong interest in scalable backend engineering and enterprise software architecture, particularly in designing efficient distributed systems capable of supporting growing digital ecosystems.
+
+
+Alongside my technical development, I have cultivated strong adaptability and creativity through independent learning and digital media work, which have strengthened my problem-solving approach and communication skills. These experiences have taught me how to learn quickly, work effectively under pressure, and approach technical challenges with creativity and precision.
+
+
+I am now seeking advanced postgraduate training to bridge the gap between practical software development and deeper engineering expertise in software architecture, system scalability, secure distributed applications, and modern software design methodologies. I am particularly interested in exploring advanced approaches to enterprise application engineering, cloud-native architectures, and secure API-driven systems that support sustainable digital transformation.
+
+The [PROGRAM NAME] at [UNIVERSITY NAME] strongly aligns with my academic and professional goals because of its practical and forward-looking approach to software engineering education, emphasis on advanced system design, and strong connection to real-world industry application. The opportunity to learn within a rigorous and innovative environment will enable me to refine my technical capabilities while gaining broader exposure to international software engineering standards and practices.
+
+
+My long-term goal is to contribute to the development of resilient digital infrastructure solutions that improve technological growth and enterprise innovation, particularly within emerging economies where scalable software systems can significantly improve institutional efficiency and economic development. I intend to apply the knowledge and global perspective gained from postgraduate study toward building impactful software solutions and contributing meaningfully to the advancement of software engineering practice.
+
+
+I am confident that my academic foundation, professional software engineering experience, technical curiosity, and commitment to continuous improvement have prepared me for the demands of postgraduate study. I look forward to contributing positively to your academic community while developing the expertise necessary to achieve my professional aspirations.
+
+
+Thank you for your consideration.
