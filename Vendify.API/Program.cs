@@ -11,8 +11,13 @@ using Vendify.Infrastructure.Services.Implementations;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Read PORT from environment (Render sets this) ────────
-var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+// ── Read PORT from environment (Render sets this) ────────
+var isProduction = builder.Environment.IsProduction();
+if (isProduction)
+{
+    var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
 
 // ── Database ─────────────────────────────────────────────
 builder.Services.AddDbContext<VendifyDbContext>(options =>
