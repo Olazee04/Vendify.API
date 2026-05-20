@@ -28,7 +28,7 @@ namespace Vendify.Infrastructure.Services.Implementations
             _httpClient = httpClientFactory.CreateClient();
         }
 
-        // ── UNIFIED METHODS ──────────────────────────────────
+        // ── UNIFIED METHODS ────────────────────────────────
 
         public async Task<ApiResponse<PaymentInitiateDto>> InitiatePaymentAsync(
             InitiatePaymentRequest request, Guid storeId)
