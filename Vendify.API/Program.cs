@@ -77,7 +77,11 @@ builder.Services.AddCors(options =>
     options.AddPolicy("VendifyPolicy", policy =>
     {
         policy
-            .AllowAnyOrigin()
+            .WithOrigins(
+                "http://localhost:3000",
+                "https://vendify-frontend.vercel.app",
+                "https://*.vercel.app"
+            )
             .AllowAnyMethod()
             .AllowAnyHeader();
     });
