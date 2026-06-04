@@ -51,6 +51,22 @@ builder.Services.AddAuthentication(options =>
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero
     };
+
+    // Add this to see detailed error in development
+    options.Events = new JwtBearerEvents
+    {
+        OnAuthenticationFailed = context =>
+        {
+            Console.WriteLine(
+                $"❌ JWT Auth Failed: {context.Exception.Message}");
+            return Task.CompletedTask;
+        },
+        OnTokenValidated = context =>
+        {
+            Console.WriteLine("✅ JWT Token Validated Successfully");
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.AddAuthorization();
@@ -61,7 +77,11 @@ builder.Services.AddCors(options =>
     options.AddPolicy("VendifyPolicy", policy =>
     {
         policy
-            .AllowAnyOrigin()
+            .WithOrigins(
+                "http://localhost:3000",
+                "https://vendify-frontend.vercel.app",
+                "https://*.vercel.app"
+            )
             .AllowAnyMethod()
             .AllowAnyHeader();
     });
@@ -169,7 +189,7 @@ app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "Vendify API v1");
-    c.RoutePrefix = string.Empty; // Swagger at root URL
+    c.RoutePrefix = "swagger"; // ← Swagger at /swagger
 });
 
 app.UseCors("VendifyPolicy");
