@@ -10,8 +10,7 @@ using Vendify.Infrastructure.Services.Implementations;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Read PORT from environment (Render sets this) ────────
-// ── Read PORT from environment (Render sets this) ────────
+// ── PORT (Render only) ───────────────────────────────────
 var isProduction = builder.Environment.IsProduction();
 if (isProduction)
 {
@@ -24,7 +23,7 @@ builder.Services.AddDbContext<VendifyDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// ── JWT Authentication ────────────────────────────────────
+// ── JWT ──────────────────────────────────────────────────
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secret = jwtSettings["Secret"]
     ?? Environment.GetEnvironmentVariable("JWT_SECRET")
@@ -51,8 +50,6 @@ builder.Services.AddAuthentication(options =>
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero
     };
-
-    // Add this to see detailed error in development
     options.Events = new JwtBearerEvents
     {
         OnAuthenticationFailed = context =>
@@ -63,7 +60,7 @@ builder.Services.AddAuthentication(options =>
         },
         OnTokenValidated = context =>
         {
-            Console.WriteLine("✅ JWT Token Validated Successfully");
+            Console.WriteLine("✅ JWT Token Validated");
             return Task.CompletedTask;
         }
     };
@@ -77,11 +74,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("VendifyPolicy", policy =>
     {
         policy
-            .WithOrigins(
-                "http://localhost:3000",
-                "https://localhost:3000",
-                "https://vendify-frontend.vercel.app"
-            )
+            .AllowAnyOrigin()
             .AllowAnyMethod()
             .AllowAnyHeader();
     });
@@ -128,14 +121,8 @@ builder.Services.AddSwaggerGen(c =>
     {
         Title = "Vendify API",
         Version = "v1",
-        Description = "Vendify — Easy Online Store Builder API",
-        Contact = new OpenApiContact
-        {
-            Name = "Vendify Support",
-            Email = "support@vendify.com"
-        }
+        Description = "Vendify — Easy Online Store Builder API"
     });
-
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "Enter: Bearer {your token}",
@@ -144,7 +131,6 @@ builder.Services.AddSwaggerGen(c =>
         Type = SecuritySchemeType.ApiKey,
         Scheme = "Bearer"
     });
-
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
@@ -163,11 +149,7 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-// ── Auto-run migrations on startup ───────────────────────
-using (var scope = app.Services.CreateScope())
-
-// ── Auto-run migrations on startup ───────────────────────
-// ── Auto-run migrations on startup ───────────────────────
+// ── Migrations ───────────────────────────────────────────
 using (var migrationScope = app.Services.CreateScope())
 {
     try
@@ -175,12 +157,11 @@ using (var migrationScope = app.Services.CreateScope())
         var db = migrationScope.ServiceProvider
             .GetRequiredService<VendifyDbContext>();
         db.Database.Migrate();
-        Console.WriteLine("✅ Database migrations applied successfully");
+        Console.WriteLine("✅ Database migrations applied");
     }
     catch (Exception ex)
     {
         Console.WriteLine($"⚠️ Migration warning: {ex.Message}");
-        Console.WriteLine("App will continue — check DB connection");
     }
 }
 
@@ -189,7 +170,7 @@ app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "Vendify API v1");
-    c.RoutePrefix = "swagger"; // ← Swagger at /swagger
+    c.RoutePrefix = "swagger";
 });
 
 app.UseCors("VendifyPolicy");
