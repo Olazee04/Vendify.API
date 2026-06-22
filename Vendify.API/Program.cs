@@ -174,7 +174,10 @@ app.UseSwaggerUI(c =>
 });
 
 app.UseCors("VendifyPolicy");
-app.UseHttpsRedirection();
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
