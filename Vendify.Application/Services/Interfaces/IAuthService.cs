@@ -5,7 +5,7 @@ namespace Vendify.Application.Services.Interfaces
 {
     public interface IAuthService
     {
-        Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request);
+        Task<ApiResponse<RegisterResponse>> RegisterAsync(RegisterRequest request);
         Task<ApiResponse<AuthResponse>> LoginAsync(LoginRequest request);
         Task<ApiResponse<AuthResponse>> RefreshTokenAsync(RefreshTokenRequest request);
         Task<ApiResponse> ForgotPasswordAsync(ForgotPasswordRequest request);

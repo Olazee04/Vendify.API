@@ -10,6 +10,7 @@ namespace Vendify.Core.Entities
         public string? LogoUrl { get; set; }
         public string? BannerUrl { get; set; }
         public string? ThemeId { get; set; }
+        public string? MerchantId { get; set; }
         public string? CustomDomain { get; set; }
         public string? WhatsAppNumber { get; set; }
         public string? InstagramHandle { get; set; }

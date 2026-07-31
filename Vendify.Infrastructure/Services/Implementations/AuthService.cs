@@ -29,25 +29,28 @@ namespace Vendify.Infrastructure.Services.Implementations
             _notificationService = notificationService;
         }
 
-        public async Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request)
+        public async Task<ApiResponse<RegisterResponse>> RegisterAsync(
+     RegisterRequest request)
         {
             var existingUser = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email == request.Email.ToLower());
+                .FirstOrDefaultAsync(u =>
+                    u.Email == request.Email.ToLower());
 
             if (existingUser != null)
-                return ApiResponse<AuthResponse>.FailureResponse("Email is already registered");
+                return ApiResponse<RegisterResponse>
+                    .FailureResponse("Email is already registered");
 
             var user = new User
             {
                 FirstName = request.FirstName.Trim(),
                 LastName = request.LastName.Trim(),
                 Email = request.Email.ToLower().Trim(),
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+                PasswordHash = BCrypt.Net.BCrypt
+                    .HashPassword(request.Password),
                 PhoneNumber = request.PhoneNumber,
-                // Use provided role or default to Merchant
                 Role = request.Role?.ToLower() == "customer"
-         ? UserRole.Customer
-         : UserRole.Merchant,
+                    ? UserRole.Customer
+                    : UserRole.Merchant,
                 IsVerified = false,
                 VerificationToken = Guid.NewGuid().ToString("N")
             };
@@ -55,17 +58,16 @@ namespace Vendify.Infrastructure.Services.Implementations
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
-            var accessToken = _jwtHelper.GenerateAccessToken(user);
-            var refreshToken = _jwtHelper.GenerateRefreshToken();
-            var refreshExpiryDays = int.Parse(
-                _configuration["JwtSettings:RefreshTokenExpiryDays"] ?? "7");
+            // Send welcome email (fire and forget)
+            _ = _notificationService.SendWelcomeEmailAsync(
+                user.Email, user.FirstName);
 
-            user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiry = DateTime.UtcNow.AddDays(refreshExpiryDays);
-            await _context.SaveChangesAsync();
-
-            return ApiResponse<AuthResponse>.SuccessResponse(
-                BuildAuthResponse(user, accessToken, refreshToken),
+            return ApiResponse<RegisterResponse>.SuccessResponse(
+                new RegisterResponse
+                {
+                    User = MapToUserDto(user),
+                    Message = "Registration successful! Please log in."
+                },
                 "Registration successful");
         }
 

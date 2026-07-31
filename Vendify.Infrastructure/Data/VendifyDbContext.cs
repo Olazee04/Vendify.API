@@ -18,6 +18,7 @@ namespace Vendify.Infrastructure.Data
         public DbSet<ProductVariant> ProductVariants { get; set; }
         public DbSet<ShippingZone> ShippingZones { get; set; }
         public DbSet<Coupon> Coupons { get; set; }
+        public DbSet<Review> Reviews { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -38,6 +39,17 @@ namespace Vendify.Infrastructure.Data
             // Add these alongside your existing filters
             modelBuilder.Entity<Category>()
                 .HasQueryFilter(c => !c.IsDeleted);
+            modelBuilder.Entity<Review>(entity =>
+            {
+                entity.HasKey(r => r.Id);
+
+                   entity.Property(r => r.ProductId)
+                    .HasColumnName("ProductId");
+
+                entity.Property(r => r.StoreId)
+                    .HasColumnName("StoreId");
+
+                  });
             modelBuilder.Entity<Coupon>()
                 .HasQueryFilter(c => !c.IsDeleted);
             modelBuilder.Entity<OrderItem>()

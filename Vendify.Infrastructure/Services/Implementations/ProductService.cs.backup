@@ -1,16 +1,18 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using Vendify.Application.Common;
+using Org.BouncyCastle.Utilities.Collections;
 using Vendify.Application.Common.Models;
 using Vendify.Application.DTOs.Product;
 using Vendify.Application.Services.Interfaces;
 using Vendify.Core.Entities;
 using Vendify.Infrastructure.Data;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace Vendify.Infrastructure.Services.Implementations
 {
     public class ProductService : IProductService
     {
         private readonly VendifyDbContext _context;
+        private readonly ICacheService _cache;
 
         public ProductService(VendifyDbContext context)
         {
@@ -433,6 +435,49 @@ namespace Vendify.Infrastructure.Services.Implementations
             };
         }
 
+        // Wrap GetPublicProductsAsync with caching:
+        public async Task<ApiResponse<PagedResult<ProductDto>>>
+            GetPublicProductsAsync(
+                string storeSlug,
+                ProductFilterDto filter)
+        {
+            // Try cache first
+            var cacheKey = CacheService.Keys.Products(storeSlug) +
+                $":{filter.Page}:{filter.PageSize}";
+            var cached = await _cache
+                .GetAsync<PagedResult<ProductDto>>(cacheKey);
+            if (cached != null)
+                return ApiResponse<PagedResult<ProductDto>>
+                    .SuccessResult(cached);
+
+            // Fetch from DB
+            // ... existing code ...
+
+            // Cache result for 5 minutes
+            await _cache.SetAsync(
+                cacheKey, result, CacheService.Short);
+
+            return ApiResponse<PagedResult<ProductDto>>
+                .SuccessResult(result);
+        }
+
+        // Invalidate cache when product is updated:
+        public async Task<ApiResponse<ProductDto>>
+            UpdateProductAsync(
+                string id, UpdateProductDto dto,
+                string merchantId)
+        {
+            // ... existing update code ...
+
+            // Invalidate cache
+            await _cache.RemoveAsync(
+                CacheService.Keys.Product(id));
+            await _cache.RemoveByPrefixAsync(
+                $"products:{store.Slug}");
+
+            return ApiResponse<ProductDto>
+                .SuccessResult(updated);
+        }
 
         private static ProductDto MapToProductDto(Product product)
         {

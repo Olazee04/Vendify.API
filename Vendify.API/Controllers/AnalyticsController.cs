@@ -58,7 +58,11 @@ namespace Vendify.API.Controllers
         {
             var storeId = await GetStoreIdAsync();
             if (storeId == null)
-                return BadRequest(new { message = "Store not found" });
+                return BadRequest(new
+                {
+                    message = "Store not found. Please create a store first using POST /api/v1/stores before accessing analytics.",
+                    nextStep = "POST /api/v1/stores"
+                });
 
             var result = await _analyticsService
                 .GetInventoryReportAsync(storeId.Value);

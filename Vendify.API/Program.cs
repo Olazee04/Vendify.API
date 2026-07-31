@@ -74,9 +74,14 @@ builder.Services.AddCors(options =>
     options.AddPolicy("VendifyPolicy", policy =>
     {
         policy
-            .AllowAnyOrigin()
+            .WithOrigins(
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "https://vendify-frontend.vercel.app"
+            )
+            .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowAnyHeader();
+            .AllowCredentials();
     });
 });
 
@@ -109,6 +114,8 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IUploadService, UploadService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IThemeService, ThemeService>();
+builder.Services.AddScoped<IReviewService, ReviewService>();
+builder.Services.AddScoped<IWhatsAppBotService, WhatsAppBotService>();
 
 // ── Controllers ──────────────────────────────────────────
 builder.Services.AddControllers();

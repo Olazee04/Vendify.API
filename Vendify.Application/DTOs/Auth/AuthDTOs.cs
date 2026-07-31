@@ -85,7 +85,12 @@ namespace Vendify.Application.DTOs.Auth
         public DateTime ExpiresAt { get; set; }
         public UserDto User { get; set; } = null!;
     }
-
+   
+    public class RegisterResponse
+    {
+        public UserDto User { get; set; } = null!;
+        public string Message { get; set; } = string.Empty;
+    }
     public class UserDto
     {
         public Guid Id { get; set; }
