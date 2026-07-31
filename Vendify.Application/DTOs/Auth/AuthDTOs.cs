@@ -24,9 +24,6 @@ namespace Vendify.Application.DTOs.Auth
 
         [Phone]
         public string? PhoneNumber { get; set; }
-
-        // Optional — defaults to Merchant if not provided
-        public string Role { get; set; } = "Merchant";
     }
 
     public class LoginRequest

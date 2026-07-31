@@ -48,9 +48,7 @@ namespace Vendify.Infrastructure.Services.Implementations
                 PasswordHash = BCrypt.Net.BCrypt
                     .HashPassword(request.Password),
                 PhoneNumber = request.PhoneNumber,
-                Role = request.Role?.ToLower() == "customer"
-                    ? UserRole.Customer
-                    : UserRole.Merchant,
+                Role = UserRole.Merchant,
                 IsVerified = false,
                 VerificationToken = Guid.NewGuid().ToString("N")
             };

@@ -156,6 +156,7 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
+
 // ── Migrations ───────────────────────────────────────────
 using (var migrationScope = app.Services.CreateScope())
 {
@@ -173,6 +174,39 @@ using (var migrationScope = app.Services.CreateScope())
 }
 
 // ── Middleware ───────────────────────────────────────────
+// Global exception handler
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+
+        var error = context.Features
+            .Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+
+        if (error != null)
+        {
+            Console.WriteLine("============== EXCEPTION ==============");
+            Console.WriteLine($"Request: {context.Request.Method} {context.Request.Path}");
+            Console.WriteLine(error.Error.ToString());
+            Console.WriteLine("=======================================");
+
+            var isDev = app.Environment.IsDevelopment();
+
+            await context.Response.WriteAsJsonAsync(new
+            {
+                success = false,
+                message = isDev
+                    ? error.Error.Message
+                    : "Internal server error.",
+                errors = isDev
+                    ? new[] { error.Error.ToString() }
+                    : null
+            });
+        }
+    });
+});
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
