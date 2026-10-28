@@ -68,6 +68,11 @@ public static class HangfireConfig
             job => job.ProcessPendingWebhooksAsync(),
             "*/5 * * * *");
 
+        RecurringJob.AddOrUpdate<OrderReminderJob>(
+    "abandoned-cart-reminders",
+    job => job.AbandonedCartRemindersAsync(),
+    "0 * * * *"); // Every hour
+
         return app;
     }
 }
@@ -80,3 +85,4 @@ public class HangfireAuthFilter : IDashboardAuthorizationFilter
         return httpContext.User.Identity?.IsAuthenticated == true;
     }
 }
+

@@ -2,6 +2,7 @@
 using MailKit.Security;
 using Microsoft.Extensions.Configuration;
 using MimeKit;
+using Stripe;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -306,58 +307,61 @@ namespace Vendify.Infrastructure.Services.Implementations
         // ── WHATSAPP ─────────────────────────────────────────
 
         public async Task<bool> SendWhatsAppMessageAsync(
-            WhatsAppMessageDto message)
+    WhatsAppMessageDto message)
         {
             try
             {
-                var accessToken =
-                    _configuration["WhatsApp:AccessToken"];
-                var phoneNumberId =
-                    _configuration["WhatsApp:PhoneNumberId"];
+                var phoneNumberId = _configuration["WhatsApp:PhoneNumberId"];
+                var accessToken = _configuration["WhatsApp:AccessToken"];
+                var apiVersion = _configuration["WhatsApp:ApiVersion"]
+                    ?? "v18.0";
 
-                if (string.IsNullOrEmpty(accessToken) ||
-                    string.IsNullOrEmpty(phoneNumberId))
+                if (string.IsNullOrEmpty(phoneNumberId) ||
+                    string.IsNullOrEmpty(accessToken))
                 {
                     Console.WriteLine(
-                        "WhatsApp not configured — skipping");
+                        $"WhatsApp not configured. " +
+                        $"Message to {message.PhoneNumber}: {message.Message}");
                     return false;
                 }
 
-                var client = _httpClientFactory.CreateClient();
-                client.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", accessToken);
+                var url =
+                    $"https://graph.facebook.com/{apiVersion}" +
+                    $"/{phoneNumberId}/messages";
 
-                // Clean phone number
-                var phone = message.PhoneNumber
-                    .Replace("+", "")
-                    .Replace("-", "")
-                    .Replace(" ", "");
-
-                // Add country code if missing (Nigeria default)
-                if (phone.StartsWith("0"))
-                    phone = "234" + phone.Substring(1);
-
-                var payload = new
+                var body = new
                 {
                     messaging_product = "whatsapp",
-                    to = phone,
+                    to = message.PhoneNumber,
                     type = "text",
                     text = new { body = message.Message }
                 };
 
-                var json = JsonSerializer.Serialize(payload);
+                var json = JsonSerializer.Serialize(body);
                 var content = new StringContent(
                     json, Encoding.UTF8, "application/json");
 
-                var response = await client.PostAsync(
-                    $"https://graph.facebook.com/v18.0/{phoneNumberId}/messages",
-                    content);
+                var client = _httpClientFactory.CreateClient();
+                client.DefaultRequestHeaders.Clear();
+                client.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", accessToken);
 
-                return response.IsSuccessStatusCode;
+                var response = await client.PostAsync(url, content);
+                var responseBody =
+                    await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine(
+                        $"WhatsApp API error: {responseBody}");
+                    return false;
+                }
+
+                return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"WhatsApp error: {ex.Message}");
+                Console.WriteLine($"WhatsApp send failed: {ex.Message}");
                 return false;
             }
         }

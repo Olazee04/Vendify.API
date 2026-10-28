@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using AspNetCoreRateLimit;
 using Vendify.Application.Services.Interfaces;
 using Vendify.Infrastructure.Data;
 using Vendify.Infrastructure.Helpers;
@@ -25,9 +26,11 @@ builder.Services.AddDbContext<VendifyDbContext>(options =>
 
 // ── JWT ──────────────────────────────────────────────────
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secret = jwtSettings["Secret"]
-    ?? Environment.GetEnvironmentVariable("JWT_SECRET")
-    ?? throw new Exception("JWT Secret not configured");
+var secret = jwtSettings["Secret"];
+if (string.IsNullOrWhiteSpace(secret))
+    secret = Environment.GetEnvironmentVariable("JWT_SECRET");
+if (string.IsNullOrWhiteSpace(secret) || secret.Length < 32)
+    throw new Exception("JWT secret is missing or too short. Set JwtSettings__Secret.");
 
 builder.Services.AddAuthentication(options =>
 {
@@ -77,8 +80,9 @@ builder.Services.AddCors(options =>
             .WithOrigins(
                 "http://localhost:3000",
                 "http://localhost:3001",
-                "https://vendify-frontend-mocha.vercel.app"
-            )
+                "https://vendify-frontend.vercel.app",
+                "https://vendify-frontend-olazee-s-projects.vercel.app"
+                 )
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -105,8 +109,17 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IStoreService, StoreService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddHttpClient<IPaymentVerificationService, PaymentVerificationService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IPaymentFulfilmentService, PaymentFulfilmentService>();
+builder.Services.AddScoped<IPaymentAttentionService, PaymentAttentionService>();
 builder.Services.AddScoped<IShippingService, ShippingService>();
+builder.Services.AddScoped<IStockpileService, StockpileService>();
+builder.Services.AddScoped<IStockpileMailer, StockpileMailer>();
+builder.Services.AddScoped<IStockpileAdminService, StockpileAdminService>();
+builder.Services.AddSingleton<IStockpileNotifier, StockpileNotifier>();
+builder.Services.AddScoped<ICustomerMailer, CustomerMailer>();
+builder.Services.AddScoped<ICustomerAuthService, CustomerAuthService>();
 builder.Services.AddScoped<ICouponService, CouponService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
@@ -116,6 +129,13 @@ builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IThemeService, ThemeService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IWhatsAppBotService, WhatsAppBotService>();
+
+// ── Rate limiting ────────────────────────────────────────
+builder.Services.AddMemoryCache();
+builder.Services.Configure<IpRateLimitOptions>(
+    builder.Configuration.GetSection("IpRateLimiting"));
+builder.Services.AddInMemoryRateLimiting();
+builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
 // ── Controllers ──────────────────────────────────────────
 builder.Services.AddControllers();
@@ -207,13 +227,17 @@ app.UseExceptionHandler(errorApp =>
         }
     });
 });
-app.UseSwagger();
-app.UseSwaggerUI(c =>
+if (app.Environment.IsDevelopment())
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Vendify API v1");
-    c.RoutePrefix = "swagger";
-});
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Vendify API v1");
+        c.RoutePrefix = "swagger";
+    });
+}
 
+app.UseIpRateLimiting();
 app.UseCors("VendifyPolicy");
 if (app.Environment.IsDevelopment())
 {
@@ -222,4 +246,5 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.Run();

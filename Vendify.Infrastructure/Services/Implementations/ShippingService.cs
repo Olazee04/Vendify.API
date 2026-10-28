@@ -39,7 +39,11 @@ namespace Vendify.Infrastructure.Services.Implementations
                 IsActive = request.IsActive,
                 EstimatedDaysMin = request.EstimatedDaysMin,
                 EstimatedDaysMax = request.EstimatedDaysMax,
-                StoreId = storeId
+                StoreId = storeId,
+                State = string.IsNullOrWhiteSpace(request.State)
+                    ? null : request.State.Trim(),
+                City = string.IsNullOrWhiteSpace(request.City)
+                    ? null : request.City.Trim()
             };
 
             _context.ShippingZones.Add(zone);
@@ -102,6 +106,12 @@ namespace Vendify.Infrastructure.Services.Implementations
                 zone.EstimatedDaysMin = request.EstimatedDaysMin;
             if (request.EstimatedDaysMax.HasValue)
                 zone.EstimatedDaysMax = request.EstimatedDaysMax;
+            if (request.State != null)
+                zone.State = string.IsNullOrWhiteSpace(request.State)
+                    ? null : request.State.Trim();
+            if (request.City != null)
+                zone.City = string.IsNullOrWhiteSpace(request.City)
+                    ? null : request.City.Trim();
 
             zone.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
@@ -135,40 +145,18 @@ namespace Vendify.Infrastructure.Services.Implementations
                         DeliveryEstimate = "3-7 business days"
                     });
 
-            // Match zone by state name
-            var matchedZone = zones.FirstOrDefault(z =>
-                z.Name.ToLower().Contains(
-                    request.State.ToLower()) ||
-                request.State.ToLower().Contains(
-                    z.Name.ToLower()))
-
-                // Fallback to nationwide zone
-                ?? zones.FirstOrDefault(z =>
-                    z.Name.ToLower() == "nationwide" ||
-                    z.Name.ToLower() == "all states" ||
-                    z.Name.ToLower() == "all")
-
-                // Fallback to international
-                ?? zones.FirstOrDefault(z =>
-                    z.Name.ToLower() == "international" &&
-                    request.Country?.ToLower() != "nigeria")
-
-                // Use cheapest available
-                ?? zones.OrderBy(z => z.Fee).FirstOrDefault();
+            var matchedZone = ShippingZoneMatcher.FindZone(
+     zones, request.State, request.Country, request.City);
 
             if (matchedZone == null)
-                return ApiResponse<ShippingCalculateDto>.SuccessResponse(
-                    new ShippingCalculateDto
-                    {
-                        Fee = 0,
-                        ZoneName = "Standard",
-                        IsFreeShipping = true
-                    });
+                return ApiResponse<ShippingCalculateDto>.FailureResponse(
+                    $"Sorry, this store does not deliver to {request.State} yet.");
 
             return ApiResponse<ShippingCalculateDto>.SuccessResponse(
                 new ShippingCalculateDto
                 {
-                    Fee = matchedZone.Fee,
+                    Fee = matchedZone.Type == ShippingType.FreeShipping
+                        ? 0 : matchedZone.Fee,
                     ZoneName = matchedZone.Name,
                     IsFreeShipping = matchedZone.Type ==
                         ShippingType.FreeShipping || matchedZone.Fee == 0,
@@ -209,7 +197,9 @@ namespace Vendify.Infrastructure.Services.Implementations
                 EstimatedDaysMin = zone.EstimatedDaysMin,
                 EstimatedDaysMax = zone.EstimatedDaysMax,
                 DeliveryEstimate = GetDeliveryEstimate(zone),
-                StoreId = zone.StoreId
+                StoreId = zone.StoreId,
+                State = zone.State,
+                City = zone.City
             };
         }
 

@@ -14,6 +14,7 @@ namespace Vendify.Application.DTOs.Inventory
         [Required]
         public string Reason { get; set; } = string.Empty;
         // "Purchase", "Return", "Damaged", "Correction"
+        public Guid? VariantId { get; set; }
     }
 
     public class BulkStockUpdateRequest
@@ -39,5 +40,15 @@ namespace Vendify.Application.DTOs.Inventory
         public string? ImageUrl { get; set; }
         public decimal Price { get; set; }
         public string? CategoryName { get; set; }
+        public List<InventoryVariantDto> Variants { get; set; } = new();
+    }
+
+    public class InventoryVariantDto
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+        public int StockQuantity { get; set; }
+        public string StockStatus { get; set; } = string.Empty;
     }
 }

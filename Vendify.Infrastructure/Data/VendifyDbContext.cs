@@ -17,8 +17,17 @@ namespace Vendify.Infrastructure.Data
         public DbSet<ProductImage> ProductImages { get; set; }
         public DbSet<ProductVariant> ProductVariants { get; set; }
         public DbSet<ShippingZone> ShippingZones { get; set; }
+        public DbSet<StockpileSettings> StockpileSettings { get; set; }
+        public DbSet<StockpileAccessCode> StockpileAccessCodes { get; set; }
+        public DbSet<PaymentIntent> PaymentIntents { get; set; }
+        public DbSet<StoreCustomer> StoreCustomers { get; set; }
+        public DbSet<CustomerAuthCode> CustomerAuthCodes { get; set; }
+        public DbSet<Stockpile> Stockpiles { get; set; }
+        public DbSet<StockpileDeposit> StockpileDeposits { get; set; }
+        public DbSet<StockpileItem> StockpileItems { get; set; }
         public DbSet<Coupon> Coupons { get; set; }
         public DbSet<Review> Reviews { get; set; }
+        
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -26,6 +35,20 @@ namespace Vendify.Infrastructure.Data
 
             modelBuilder.ApplyConfigurationsFromAssembly(
                 typeof(VendifyDbContext).Assembly);
+            modelBuilder.Entity<StockpileDeposit>()
+                .HasOne<Stockpile>()
+                .WithMany()
+                .HasForeignKey(d => d.StockpileId);
+
+            modelBuilder.Entity<StockpileItem>()
+                .HasOne<Stockpile>()
+                .WithMany()
+                .HasForeignKey(i => i.StockpileId);
+
+            modelBuilder.Entity<StockpileItem>()
+                .HasOne<StockpileDeposit>()
+                .WithMany()
+                .HasForeignKey(i => i.DepositId);
 
             // Global soft delete filters
             modelBuilder.Entity<Product>()

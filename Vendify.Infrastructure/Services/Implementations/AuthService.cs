@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using Vendify.Application.Common.Models;
 using Vendify.Application.DTOs.Auth;
+using Vendify.Application.DTOs.Notification;
 using Vendify.Application.Services.Interfaces;
 using Vendify.Core.Entities;
 using Vendify.Core.Enums;
@@ -29,45 +30,123 @@ namespace Vendify.Infrastructure.Services.Implementations
             _notificationService = notificationService;
         }
 
-        public async Task<ApiResponse<RegisterResponse>> RegisterAsync(
-     RegisterRequest request)
+public async Task<ApiResponse<RegisterResponse>> RegisterAsync(
+    RegisterRequest request)
+{
+    var existingUser = await _context.Users
+        .FirstOrDefaultAsync(u =>
+            u.Email == request.Email.ToLower());
+
+    if (existingUser != null)
+        return ApiResponse<RegisterResponse>
+            .FailureResponse("Email is already registered");
+
+    // Validate email format
+    var emailRegex = new System.Text.RegularExpressions
+        .Regex(@"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$");
+
+    if (!emailRegex.IsMatch(request.Email))
+        return ApiResponse<RegisterResponse>
+            .FailureResponse("Please enter a valid email address");
+
+    var blockedDomains = new[]
+    {
+        "mailinator.com", "guerrillamail.com", "throwaway.com",
+        "yopmail.com", "trashmail.com", "tempmail.com",
+        "temp-mail.org", "sharklasers.com", "maildrop.cc",
+        "dispostable.com", "fakeinbox.com", "spam4.me",
+        "mailnull.com", "mytrashmail.com", "example.com",
+        "test.com", "fake.com"
+    };
+
+    var emailDomain = request.Email.Split('@')
+        .LastOrDefault()?.ToLower();
+
+    if (blockedDomains.Contains(emailDomain))
+        return ApiResponse<RegisterResponse>
+            .FailureResponse(
+                "Disposable emails are not allowed. " +
+                "Please use your real email address.");
+
+    // Generate OTP
+    var otp = new Random().Next(100000, 999999).ToString();
+
+    var user = new User
+    {
+        FirstName = request.FirstName.Trim(),
+        LastName = request.LastName.Trim(),
+        Email = request.Email.ToLower().Trim(),
+        PasswordHash = BCrypt.Net.BCrypt
+            .HashPassword(request.Password),
+        PhoneNumber = request.PhoneNumber,
+        Role = UserRole.Merchant,
+        IsVerified = false,
+        VerificationToken = Guid.NewGuid().ToString("N"),
+        OtpCode = otp,
+        OtpExpiresAt = DateTime.UtcNow.AddMinutes(10),
+    };
+
+    _context.Users.Add(user);
+    await _context.SaveChangesAsync();
+
+    // Send OTP email (fire and forget)
+    _ = _notificationService.SendEmailAsync(new SendEmailRequest
+    {
+        ToEmail = user.Email,
+        ToName = user.FirstName,
+        Subject = "Verify your Vendify account",
+        Body = $@"
+            <div style='font-family:Arial,sans-serif;max-width:500px;
+                margin:0 auto;padding:20px'>
+                <div style='background:#7c3aed;padding:20px;
+                    border-radius:12px 12px 0 0;text-align:center'>
+                    <h1 style='color:white;margin:0;font-size:24px'>
+                        Vendify
+                    </h1>
+                </div>
+                <div style='background:#f9fafb;padding:30px;
+                    border-radius:0 0 12px 12px'>
+                    <p style='color:#374151'>
+                        Hi <strong>{user.FirstName}</strong>,
+                    </p>
+                    <p style='color:#374151'>
+                        Enter this code to verify your Vendify account:
+                    </p>
+                    <div style='text-align:center;margin:30px 0'>
+                        <div style='background:white;
+                            border:2px solid #7c3aed;
+                            border-radius:12px;padding:20px;
+                            display:inline-block'>
+                            <span style='font-size:36px;font-weight:900;
+                                color:#7c3aed;letter-spacing:12px'>
+                                {otp}
+                            </span>
+                        </div>
+                    </div>
+                    <p style='color:#9ca3af;font-size:13px'>
+                        This code expires in 10 minutes.
+                    </p>
+                    <p style='color:#9ca3af;font-size:13px'>
+                        If you did not create a Vendify account,
+                        ignore this email.
+                    </p>
+                </div>
+            </div>",
+        IsHtml = true,
+
+
+    });
+
+    return ApiResponse<RegisterResponse>.SuccessResponse(
+        new RegisterResponse
         {
-            var existingUser = await _context.Users
-                .FirstOrDefaultAsync(u =>
-                    u.Email == request.Email.ToLower());
-
-            if (existingUser != null)
-                return ApiResponse<RegisterResponse>
-                    .FailureResponse("Email is already registered");
-
-            var user = new User
-            {
-                FirstName = request.FirstName.Trim(),
-                LastName = request.LastName.Trim(),
-                Email = request.Email.ToLower().Trim(),
-                PasswordHash = BCrypt.Net.BCrypt
-                    .HashPassword(request.Password),
-                PhoneNumber = request.PhoneNumber,
-                Role = UserRole.Merchant,
-                IsVerified = false,
-                VerificationToken = Guid.NewGuid().ToString("N")
-            };
-
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
-
-            // Send welcome email (fire and forget)
-            _ = _notificationService.SendWelcomeEmailAsync(
-                user.Email, user.FirstName);
-
-            return ApiResponse<RegisterResponse>.SuccessResponse(
-                new RegisterResponse
-                {
-                    User = MapToUserDto(user),
-                    Message = "Registration successful! Please log in."
-                },
-                "Registration successful");
-        }
+            User = MapToUserDto(user),
+            Message =
+                "Registration successful! " +
+                "Check your email for the verification code.",
+        },
+        "Registration successful");
+}
 
         public async Task<ApiResponse<AuthResponse>> LoginAsync(LoginRequest request)
         {
@@ -209,6 +288,146 @@ namespace Vendify.Infrastructure.Services.Implementations
                 return ApiResponse<UserDto>.FailureResponse("User not found");
 
             return ApiResponse<UserDto>.SuccessResponse(MapToUserDto(user));
+        }
+
+        public async Task<ApiResponse<AuthResponse>> VerifyOtpAsync(
+    VerifyOtpRequest request)
+        {
+            User? user = null;
+
+            if (!string.IsNullOrEmpty(request.Email))
+                user = await _context.Users
+                    .Include(u => u.Store)
+                    .FirstOrDefaultAsync(u =>
+                        u.Email == request.Email.ToLower());
+
+            if (!string.IsNullOrEmpty(request.PhoneNumber)
+                && user == null)
+                user = await _context.Users
+                    .Include(u => u.Store)
+                    .FirstOrDefaultAsync(u =>
+                        u.PhoneNumber == request.PhoneNumber);
+
+            if (user == null)
+                return ApiResponse<AuthResponse>
+                    .FailureResponse("User not found");
+
+            if (user.IsVerified)
+            {
+                // Already verified — just log them in
+                var existingToken =
+                    _jwtHelper.GenerateAccessToken(user);
+                var existingRefresh =
+                    _jwtHelper.GenerateRefreshToken();
+                user.RefreshToken = existingRefresh;
+                user.RefreshTokenExpiry =
+                    DateTime.UtcNow.AddDays(7);
+                await _context.SaveChangesAsync();
+                return ApiResponse<AuthResponse>.SuccessResponse(
+                    BuildAuthResponse(user, existingToken,
+                        existingRefresh),
+                    "Account already verified. Logged in!");
+            }
+
+            if (user.OtpCode != request.Otp)
+                return ApiResponse<AuthResponse>
+                    .FailureResponse("Invalid verification code");
+
+            if (user.OtpExpiresAt < DateTime.UtcNow)
+                return ApiResponse<AuthResponse>
+                    .FailureResponse(
+                        "Code has expired. Please request a new one.");
+
+            // Mark verified and clear OTP
+            user.IsVerified = true;
+            user.OtpCode = null;
+            user.OtpExpiresAt = null;
+
+            // Generate tokens for auto-login
+            var accessToken = _jwtHelper.GenerateAccessToken(user);
+            var refreshToken = _jwtHelper.GenerateRefreshToken();
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiry = DateTime.UtcNow.AddDays(7);
+
+            await _context.SaveChangesAsync();
+
+            // Send welcome email
+            _ = _notificationService.SendWelcomeEmailAsync(
+                user.Email, user.FirstName);
+
+            return ApiResponse<AuthResponse>.SuccessResponse(
+                BuildAuthResponse(user, accessToken, refreshToken),
+                "Email verified! Welcome to Vendify!");
+        }
+
+        public async Task<ApiResponse> ResendOtpAsync(
+            ResendOtpRequest request)
+        {
+            User? user = null;
+
+            if (!string.IsNullOrEmpty(request.Email))
+                user = await _context.Users
+                    .FirstOrDefaultAsync(u =>
+                        u.Email == request.Email.ToLower());
+
+            if (user == null)
+                return ApiResponse.FailureResponse("User not found");
+
+            if (user.IsVerified)
+                return ApiResponse.FailureResponse(
+                    "Account is already verified");
+
+            var otp = new Random()
+                .Next(100000, 999999).ToString();
+            user.OtpCode = otp;
+            user.OtpExpiresAt = DateTime.UtcNow.AddMinutes(10);
+            await _context.SaveChangesAsync();
+
+            _ = _notificationService.SendEmailAsync(
+                new SendEmailRequest
+                {
+                    ToEmail = user.Email,
+                    ToName = user.FirstName,
+                    Subject = "Your new Vendify verification code",
+                    Body = $@"
+                <div style='font-family:Arial,sans-serif;
+                    max-width:500px;margin:0 auto;padding:20px'>
+                    <div style='background:#7c3aed;padding:20px;
+                        border-radius:12px 12px 0 0;
+                        text-align:center'>
+                        <h1 style='color:white;margin:0;
+                            font-size:24px'>Vendify</h1>
+                    </div>
+                    <div style='background:#f9fafb;padding:30px;
+                        border-radius:0 0 12px 12px'>
+                        <p style='color:#374151'>
+                            Hi <strong>{user.FirstName}</strong>,
+                        </p>
+                        <p style='color:#374151'>
+                            Your new verification code is:
+                        </p>
+                        <div style='text-align:center;margin:30px 0'>
+                            <div style='background:white;
+                                border:2px solid #7c3aed;
+                                border-radius:12px;padding:20px;
+                                display:inline-block'>
+                                <span style='font-size:36px;
+                                    font-weight:900;color:#7c3aed;
+                                    letter-spacing:12px'>
+                                    {otp}
+                                </span>
+                            </div>
+                        </div>
+                        <p style='color:#9ca3af;font-size:13px'>
+                            Expires in 10 minutes.
+                        </p>
+                    </div>
+                </div>",
+                    IsHtml = true,
+                });
+
+            return ApiResponse.SuccessResponse(
+                "New verification code sent!");
         }
 
         // ── Private Helpers ──────────────────────────────────

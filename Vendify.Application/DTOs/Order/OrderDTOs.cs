@@ -26,6 +26,18 @@ namespace Vendify.Application.DTOs.Order
         public string? CouponCode { get; set; }
         public string? Notes { get; set; }
         public PaymentMethod PaymentMethod { get; set; }
+        public Guid? ShippingZoneId { get; set; }
+        // Payment details
+        public string? PaymentReference { get; set; }
+        public string? PaymentStatus { get; set; }
+
+        // Totals
+        public decimal Subtotal { get; set; }
+        public decimal Discount { get; set; }
+        public decimal ShippingFee { get; set; }
+        public decimal Total { get; set; }
+
+
     }
 
     public class ShippingAddressRequest
@@ -49,10 +61,11 @@ namespace Vendify.Application.DTOs.Order
     public class OrderItemRequest
     {
         [Required]
-        public Guid ProductId { get; set; }
-        public Guid? VariantId { get; set; }
+        public string ProductId { get; set; } = string.Empty;
+        public string? VariantId { get; set; }
         [Range(1, int.MaxValue)]
         public int Quantity { get; set; } = 1;
+        public decimal UnitPrice { get; set; }
     }
 
     public class UpdateOrderStatusRequest

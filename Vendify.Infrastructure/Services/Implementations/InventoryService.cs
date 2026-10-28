@@ -30,11 +30,12 @@ namespace Vendify.Infrastructure.Services.Implementations
         }
 
         public async Task<ApiResponse<InventoryItemDto>> AdjustStockAsync(
-            AdjustStockRequest request, Guid storeId)
+     AdjustStockRequest request, Guid storeId)
         {
             var product = await _context.Products
                 .Include(p => p.Images)
                 .Include(p => p.Category)
+                .Include(p => p.Variants)
                 .FirstOrDefaultAsync(p =>
                     p.Id == request.ProductId &&
                     p.StoreId == storeId);
@@ -42,6 +43,36 @@ namespace Vendify.Infrastructure.Services.Implementations
             if (product == null)
                 return ApiResponse<InventoryItemDto>.FailureResponse(
                     "Product not found");
+
+            if (product.Variants.Any())
+            {
+                if (!request.VariantId.HasValue)
+                    return ApiResponse<InventoryItemDto>.FailureResponse(
+                        "Choose which option to adjust.");
+
+                var variant = product.Variants
+                    .FirstOrDefault(v => v.Id == request.VariantId.Value);
+                if (variant == null)
+                    return ApiResponse<InventoryItemDto>.FailureResponse(
+                        "That option was not found.");
+
+                var newVariantQty = variant.StockQuantity + request.Quantity;
+                if (newVariantQty < 0)
+                    return ApiResponse<InventoryItemDto>.FailureResponse(
+                        $"Cannot reduce stock below 0. " +
+                        $"Current stock: {variant.StockQuantity}");
+
+                variant.StockQuantity = newVariantQty;
+                // Keep the product total equal to the sum of its options
+                product.StockQuantity =
+                    product.Variants.Sum(v => v.StockQuantity);
+                product.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                return ApiResponse<InventoryItemDto>.SuccessResponse(
+                    MapToDto(product),
+                    $"Stock adjusted. New quantity: {newVariantQty}");
+            }
 
             var newQuantity = product.StockQuantity + request.Quantity;
 
@@ -90,21 +121,22 @@ namespace Vendify.Infrastructure.Services.Implementations
         }
 
         public async Task<ApiResponse<List<InventoryItemDto>>>
-            GetLowStockItemsAsync(Guid storeId, int threshold = 5)
+     GetLowStockItemsAsync(Guid storeId, int threshold = 5)
         {
             var products = await _context.Products
                 .Include(p => p.Images)
                 .Include(p => p.Category)
-                .Where(p =>
-                    p.StoreId == storeId &&
-                    p.TrackInventory &&
-                    p.StockQuantity > 0 &&
-                    p.StockQuantity <= threshold)
-                .OrderBy(p => p.StockQuantity)
+                .Include(p => p.Variants)
+                .Where(p => p.StoreId == storeId && p.TrackInventory)
                 .ToListAsync();
 
-            return ApiResponse<List<InventoryItemDto>>.SuccessResponse(
-                products.Select(MapToDto).ToList());
+            var items = products
+                .Select(p => MapToDto(p, threshold))
+                .Where(i => i.StockStatus == "Low Stock")
+                .OrderBy(i => i.CurrentStock)
+                .ToList();
+
+            return ApiResponse<List<InventoryItemDto>>.SuccessResponse(items);
         }
 
         public async Task<ApiResponse<List<InventoryItemDto>>>
@@ -113,41 +145,60 @@ namespace Vendify.Infrastructure.Services.Implementations
             var products = await _context.Products
                 .Include(p => p.Images)
                 .Include(p => p.Category)
-                .Where(p =>
-                    p.StoreId == storeId &&
-                    p.TrackInventory &&
-                    p.StockQuantity == 0)
+                .Include(p => p.Variants)
+                .Where(p => p.StoreId == storeId && p.TrackInventory)
                 .ToListAsync();
 
-            return ApiResponse<List<InventoryItemDto>>.SuccessResponse(
-                products.Select(MapToDto).ToList());
+            var items = products
+                .Select(p => MapToDto(p))
+                .Where(i => i.StockStatus == "Out of Stock")
+                .ToList();
+
+            return ApiResponse<List<InventoryItemDto>>.SuccessResponse(items);
         }
 
         private static InventoryItemDto MapToDto(
-            Core.Entities.Product product)
+     Core.Entities.Product product, int lowAt = 5)
         {
-            var stockStatus = !product.TrackInventory
-                ? "Not Tracked"
-                : product.StockQuantity == 0
-                    ? "Out of Stock"
-                    : product.StockQuantity <= 5
-                        ? "Low Stock"
-                        : "In Stock";
+            var hasOptions = product.Variants.Any();
+            var total = hasOptions
+                ? product.Variants.Sum(v => v.StockQuantity)
+                : product.StockQuantity;
+
+            string StatusOf(int n) =>
+                n <= 0 ? "Out of Stock" : n <= lowAt ? "Low Stock" : "In Stock";
+
+            string stockStatus;
+            if (!product.TrackInventory) stockStatus = "Not Tracked";
+            else if (!hasOptions) stockStatus = StatusOf(product.StockQuantity);
+            else if (total <= 0) stockStatus = "Out of Stock";
+            else if (product.Variants.Any(v => v.StockQuantity <= lowAt))
+                stockStatus = "Low Stock";
+            else stockStatus = "In Stock";
 
             return new InventoryItemDto
             {
                 ProductId = product.Id,
                 ProductName = product.Name,
                 SKU = product.SKU,
-                CurrentStock = product.StockQuantity,
+                CurrentStock = total,
                 TrackInventory = product.TrackInventory,
                 StockStatus = stockStatus,
                 ImageUrl = product.Images
                     .FirstOrDefault(i => i.IsPrimary)?.Url
                     ?? product.Images.FirstOrDefault()?.Url,
                 Price = product.Price,
-                CategoryName = product.Category?.Name
+                CategoryName = product.Category?.Name,
+                Variants = product.Variants.Select(v => new InventoryVariantDto
+                {
+                    Id = v.Id,
+                    Name = v.Name,
+                    Value = v.Value,
+                    StockQuantity = v.StockQuantity,
+                    StockStatus = StatusOf(v.StockQuantity)
+                }).ToList()
             };
         }
     }
 }
+    

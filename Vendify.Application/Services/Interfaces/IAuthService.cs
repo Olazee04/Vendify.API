@@ -13,5 +13,10 @@ namespace Vendify.Application.Services.Interfaces
         Task<ApiResponse> ChangePasswordAsync(ChangePasswordRequest request, Guid userId);
         Task<ApiResponse> VerifyEmailAsync(string token);
         Task<ApiResponse<UserDto>> GetCurrentUserAsync(Guid userId);
+        Task<ApiResponse<AuthResponse>> VerifyOtpAsync(
+    VerifyOtpRequest request);
+
+        Task<ApiResponse> ResendOtpAsync(
+            ResendOtpRequest request);
     }
 }

@@ -24,12 +24,30 @@ namespace Vendify.API.Controllers
             return result.Success ? Ok(result) : BadRequest(result);
         }
 
+        [HttpPost("verify-otp")]
+        public async Task<IActionResult> VerifyOtp(
+    [FromBody] VerifyOtpRequest request)
+        {
+            var result = await _authService.VerifyOtpAsync(request);
+            return result.Success ? Ok(result) : BadRequest(result);
+        }
+
+        [HttpPost("resend-otp")]
+        public async Task<IActionResult> ResendOtp(
+            [FromBody] ResendOtpRequest request)
+        {
+            var result = await _authService.ResendOtpAsync(request);
+            return result.Success ? Ok(result) : BadRequest(result);
+        }
+
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             var result = await _authService.LoginAsync(request);
             return result.Success ? Ok(result) : Unauthorized(result);
         }
+
+
 
         [HttpPost("refresh-token")]
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
@@ -78,5 +96,8 @@ namespace Vendify.API.Controllers
             var result = await _authService.GetCurrentUserAsync(userId);
             return result.Success ? Ok(result) : NotFound(result);
         }
+
+        
     }
+
 }

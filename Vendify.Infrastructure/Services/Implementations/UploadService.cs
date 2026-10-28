@@ -13,15 +13,10 @@ namespace Vendify.Infrastructure.Services.Implementations
 
         public UploadService(IConfiguration configuration)
         {
-            Console.WriteLine("🔥 UploadService constructor called");
 
             var cloudName = configuration["Cloudinary:CloudName"];
             var apiKey = configuration["Cloudinary:ApiKey"];
             var apiSecret = configuration["Cloudinary:ApiSecret"];
-
-            Console.WriteLine($"Cloud: {cloudName}");
-            Console.WriteLine($"Key: {apiKey}");
-            Console.WriteLine($"Secret: {apiSecret}");
 
             var account = new Account(cloudName, apiKey, apiSecret);
             _cloudinary = new Cloudinary(account);

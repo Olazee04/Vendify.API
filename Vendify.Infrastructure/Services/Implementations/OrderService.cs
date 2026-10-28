@@ -11,10 +11,14 @@ namespace Vendify.Infrastructure.Services.Implementations
     public class OrderService : IOrderService
     {
         private readonly VendifyDbContext _context;
+        private readonly IPaymentVerificationService _paymentVerifier;
 
-        public OrderService(VendifyDbContext context)
+        public OrderService(
+            VendifyDbContext context,
+            IPaymentVerificationService paymentVerifier)
         {
             _context = context;
+            _paymentVerifier = paymentVerifier;
         }
 
         public async Task<ApiResponse<OrderDto>> CreateOrderAsync(
@@ -27,38 +31,61 @@ namespace Vendify.Infrastructure.Services.Implementations
             if (store == null)
                 return ApiResponse<OrderDto>.FailureResponse("Store not found");
 
+            // Parse and validate IDs up front
+            var lines = new List<(Guid ProductId, Guid? VariantId, int Quantity)>();
+            foreach (var item in request.Items)
+            {
+                if (!Guid.TryParse(item.ProductId, out var productGuid))
+                    return ApiResponse<OrderDto>.FailureResponse(
+                        $"Invalid product ID: {item.ProductId}");
+
+                Guid? variantGuid = null;
+                if (!string.IsNullOrWhiteSpace(item.VariantId))
+                {
+                    if (!Guid.TryParse(item.VariantId, out var parsedVariant))
+                        return ApiResponse<OrderDto>.FailureResponse(
+                            $"Invalid variant ID: {item.VariantId}");
+                    variantGuid = parsedVariant;
+                }
+
+                if (item.Quantity < 1)
+                    return ApiResponse<OrderDto>.FailureResponse("Quantity must be at least 1");
+
+                lines.Add((productGuid, variantGuid, item.Quantity));
+            }
+
             // Validate items and calculate totals
             decimal subtotal = 0;
             var orderItems = new List<OrderItem>();
+            var products = new Dictionary<Guid, Product>();
 
-            foreach (var item in request.Items)
+            foreach (var line in lines)
             {
                 var product = await _context.Products
                     .Include(p => p.Images)
                     .Include(p => p.Variants)
                     .FirstOrDefaultAsync(p =>
-                        p.Id == item.ProductId &&
+                        p.Id == line.ProductId &&
                         p.StoreId == store.Id &&
                         p.IsPublished);
 
                 if (product == null)
                     return ApiResponse<OrderDto>.FailureResponse(
-                        $"Product {item.ProductId} not found or unavailable");
+                        $"Product {line.ProductId} not found or unavailable");
 
-                // Check stock
-                if (product.TrackInventory &&
-                    product.StockQuantity < item.Quantity)
+                if (product.TrackInventory && product.StockQuantity < line.Quantity)
                     return ApiResponse<OrderDto>.FailureResponse(
                         $"Insufficient stock for {product.Name}");
+
+                products[product.Id] = product;
 
                 decimal unitPrice = product.Price;
                 string? variantInfo = null;
 
-                // Apply variant price modifier
-                if (item.VariantId.HasValue)
+                if (line.VariantId.HasValue)
                 {
                     var variant = product.Variants
-                        .FirstOrDefault(v => v.Id == item.VariantId);
+                        .FirstOrDefault(v => v.Id == line.VariantId.Value);
 
                     if (variant != null)
                     {
@@ -67,7 +94,7 @@ namespace Vendify.Infrastructure.Services.Implementations
                     }
                 }
 
-                var itemTotal = unitPrice * item.Quantity;
+                var itemTotal = unitPrice * line.Quantity;
                 subtotal += itemTotal;
 
                 orderItems.Add(new OrderItem
@@ -75,7 +102,7 @@ namespace Vendify.Infrastructure.Services.Implementations
                     ProductId = product.Id,
                     ProductName = product.Name,
                     VariantInfo = variantInfo,
-                    Quantity = item.Quantity,
+                    Quantity = line.Quantity,
                     UnitPrice = unitPrice,
                     TotalPrice = itemTotal,
                     ProductImageUrl = product.Images
@@ -109,21 +136,61 @@ namespace Vendify.Infrastructure.Services.Implementations
                 }
             }
 
-            // Calculate shipping fee
+            // Calculate shipping fee (same rule as the cart)
             decimal shippingFee = 0;
-            var shippingZone = await _context.ShippingZones
-                .FirstOrDefaultAsync(sz =>
-                    sz.StoreId == store.Id &&
-                    sz.IsActive &&
-                    (sz.Name.ToLower().Contains(
-                        request.ShippingAddress.State.ToLower()) ||
-                     sz.Name.ToLower() == "nationwide" ||
-                     sz.Name.ToLower() == "all"));
+            var storeZones = await _context.ShippingZones
+                .Where(sz => sz.StoreId == store.Id && sz.IsActive)
+                .ToListAsync();
 
-            if (shippingZone != null)
-                shippingFee = shippingZone.Fee;
+                        if (storeZones.Any())
+            {
+                // The customer picked a delivery option: use exactly that one.
+                // Otherwise fall back to the automatic rule.
+                var shippingZone = request.ShippingZoneId.HasValue
+                    ? ShippingZoneMatcher.FindById(
+                        storeZones,
+                        request.ShippingZoneId.Value,
+                        request.ShippingAddress.State,
+                        request.ShippingAddress.Country)
+                    : ShippingZoneMatcher.FindZone(
+                        storeZones,
+                        request.ShippingAddress.State,
+                        request.ShippingAddress.Country,
+                        request.ShippingAddress.City);
+
+                if (shippingZone == null)
+                    return ApiResponse<OrderDto>.FailureResponse(
+                        $"Sorry, this store does not deliver to {request.ShippingAddress.State} yet.");
+
+                shippingFee = ShippingZoneMatcher.FeeOf(shippingZone);
+            }
 
             var total = subtotal - discount + shippingFee;
+
+
+            // Verify the payment with the payment provider
+            var isPaid = false;
+            if (!string.IsNullOrWhiteSpace(request.PaymentReference))
+            {
+                var reference = request.PaymentReference.Trim();
+
+                var alreadyUsed = await _context.Orders
+                    .AnyAsync(o => o.PaymentReference == reference);
+                if (alreadyUsed)
+                    return ApiResponse<OrderDto>.FailureResponse(
+                        "This payment has already been used for another order.");
+
+                var check = await _paymentVerifier.VerifyAsync(
+                    request.PaymentMethod, reference, total);
+                if (!check.IsVerified)
+                    return ApiResponse<OrderDto>.FailureResponse(check.Message);
+
+                isPaid = true;
+            }
+
+            var paymentStatus = isPaid
+                ? PaymentStatus.Paid
+                : PaymentStatus.Unpaid;
 
             // Create order
             var order = new Order
@@ -132,9 +199,14 @@ namespace Vendify.Infrastructure.Services.Implementations
                 CustomerName = request.CustomerName,
                 CustomerEmail = request.CustomerEmail,
                 CustomerPhone = request.CustomerPhone,
-                Status = OrderStatus.Pending,
-                PaymentStatus = PaymentStatus.Unpaid,
+                Status = isPaid
+                    ? OrderStatus.Confirmed
+                    : OrderStatus.Pending,
+                PaymentStatus = paymentStatus,
                 PaymentMethod = request.PaymentMethod,
+                PaymentReference = isPaid
+                    ? request.PaymentReference!.Trim()
+                    : null,
                 Subtotal = subtotal,
                 ShippingFee = shippingFee,
                 Discount = discount,
@@ -142,6 +214,7 @@ namespace Vendify.Infrastructure.Services.Implementations
                 CouponCode = request.CouponCode?.ToUpper(),
                 Notes = request.Notes,
                 StoreId = store.Id,
+                Items = orderItems,
                 ShippingAddress = new Core.Entities.ShippingAddress
                 {
                     FullName = request.ShippingAddress.FullName,
@@ -155,24 +228,18 @@ namespace Vendify.Infrastructure.Services.Implementations
                 }
             };
 
+            // in the Order initializer, add:  Items = orderItems,
             _context.Orders.Add(order);
-            await _context.SaveChangesAsync();
 
-            // Add order items
-            orderItems.ForEach(i => i.OrderId = order.Id);
-            _context.OrderItems.AddRange(orderItems);
-
-            // Deduct stock
-            foreach (var item in request.Items)
+            // Deduct stock using the products already loaded above
+            foreach (var line in lines)
             {
-                var product = await _context.Products
-                    .FirstOrDefaultAsync(p => p.Id == item.ProductId);
-
-                if (product?.TrackInventory == true)
-                    product.StockQuantity -= item.Quantity;
+                var product = products[line.ProductId];
+                if (product.TrackInventory)
+                    product.StockQuantity -= line.Quantity;
             }
 
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync();   // single save: order + items + stock
 
             var created = await GetFullOrderAsync(order.Id);
             return ApiResponse<OrderDto>.SuccessResponse(

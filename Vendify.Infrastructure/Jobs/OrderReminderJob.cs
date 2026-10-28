@@ -91,6 +91,61 @@ public class OrderReminderJob
         }
     }
 
+    public async Task AbandonedCartRemindersAsync()
+    {
+        // Get all stores with WhatsApp numbers
+        var stores = await _db.Stores
+            .Where(s => s.Status == StoreStatus.Active
+                && !string.IsNullOrEmpty(s.WhatsAppNumber))
+            .ToListAsync();
+
+        _logger.LogInformation(
+            "Checking abandoned carts for {Count} stores",
+            stores.Count);
+
+    
+
+        var oneHourAgo = DateTime.UtcNow.AddHours(-1);
+        var pendingOrders = await _db.Orders
+            .Include(o => o.Store)
+            .Where(o =>
+                o.Status == OrderStatus.Pending &&
+                o.PaymentStatus == PaymentStatus.Pending &&
+                o.CreatedAt >= oneHourAgo.AddHours(-1) &&
+                o.CreatedAt <= oneHourAgo)
+            .ToListAsync();
+
+        foreach (var order in pendingOrders)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(
+                    order.Store?.WhatsAppNumber))
+                {
+                    await _notifications
+                        .SendWhatsAppMessageAsync(
+                            new WhatsAppMessageDto
+                            {
+                                PhoneNumber =
+                                    order.Store.WhatsAppNumber,
+                                Message =
+                                    $"Hi! A customer started " +
+                                    $"an order ({order.OrderNumber}) " +
+                                    $"worth ₦{order.Total:N0} " +
+                                    $"about 1 hour ago but hasn't " +
+                                    $"completed payment. " +
+                                    $"You may want to follow up!"
+                            });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Failed to send cart reminder for {Order}",
+                    order.OrderNumber);
+            }
+        }
+    }
     public async Task LowStockAlertsAsync()
     {
         var stores = await _db.Stores

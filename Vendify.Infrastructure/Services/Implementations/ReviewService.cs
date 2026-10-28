@@ -4,6 +4,7 @@ using Vendify.Application.DTOs.Reviews;
 using Vendify.Application.Services.Interfaces;
 using Vendify.Core.Entities;
 using Vendify.Infrastructure.Data;
+using Vendify.Core.Enums;
 
 namespace Vendify.Infrastructure.Services.Implementations;
 
@@ -65,14 +66,45 @@ public class ReviewService : IReviewService
             return ApiResponse<ReviewDto>
                 .FailureResponse("Store not found");
 
-        var isVerified = false;
-        if (!string.IsNullOrEmpty(dto.OrderNumber))
-        {
-            isVerified = await _db.Orders.AnyAsync(o =>
-                o.OrderNumber == dto.OrderNumber &&
-                o.CustomerEmail == dto.CustomerEmail &&
-                o.StoreId == store.Id);
-        }
+        // Only people who bought this product can review it
+        if (string.IsNullOrWhiteSpace(dto.OrderNumber) ||
+            string.IsNullOrWhiteSpace(dto.CustomerEmail))
+            return ApiResponse<ReviewDto>.FailureResponse(
+                "Please enter the order number and the email you used to buy this product.");
+
+        if (!Guid.TryParse(dto.ProductId, out var productGuid))
+            return ApiResponse<ReviewDto>.FailureResponse("Invalid product");
+
+        var orderNumber = dto.OrderNumber.Trim().ToUpper();
+        var email = dto.CustomerEmail.Trim().ToLower();
+
+        var order = await _db.Orders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o =>
+                o.OrderNumber == orderNumber &&
+                o.StoreId == store.Id &&
+                o.CustomerEmail.ToLower() == email);
+
+        if (order == null)
+            return ApiResponse<ReviewDto>.FailureResponse(
+                "We could not find an order with that order number and email.");
+
+        if (order.PaymentStatus != PaymentStatus.Paid ||
+            order.Status == OrderStatus.Cancelled)
+            return ApiResponse<ReviewDto>.FailureResponse(
+                "Only paid orders can be reviewed.");
+
+        if (!order.Items.Any(i => i.ProductId == productGuid))
+            return ApiResponse<ReviewDto>.FailureResponse(
+                "This product is not part of that order.");
+
+        var alreadyReviewed = await _db.Reviews.AnyAsync(r =>
+            r.ProductId == dto.ProductId &&
+            r.CustomerEmail.ToLower() == email);
+
+        if (alreadyReviewed)
+            return ApiResponse<ReviewDto>.FailureResponse(
+                "You have already reviewed this product.");
 
         var review = new Review
         {
@@ -82,7 +114,7 @@ public class ReviewService : IReviewService
             CustomerEmail = dto.CustomerEmail,
             Rating = dto.Rating,
             Comment = dto.Comment,
-            IsVerifiedPurchase = isVerified,
+            IsVerifiedPurchase = true,
         };
 
         _db.Reviews.Add(review);

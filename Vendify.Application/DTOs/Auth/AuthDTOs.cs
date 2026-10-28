@@ -100,4 +100,20 @@ namespace Vendify.Application.DTOs.Auth
         public bool HasStore { get; set; }
         public Guid? StoreId { get; set; }
     }
+
+    public class VerifyOtpRequest
+    {
+        public string? Email { get; set; }
+        public string? PhoneNumber { get; set; }
+
+        [Required]
+        public string Otp { get; set; } = string.Empty;
+    }
+
+    public class ResendOtpRequest
+    {
+        public string? Email { get; set; }
+        public string? PhoneNumber { get; set; }
+        public string VerificationMethod { get; set; } = "email";
+    }
 }

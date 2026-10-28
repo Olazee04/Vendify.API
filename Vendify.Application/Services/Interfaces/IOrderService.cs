@@ -23,5 +23,7 @@ namespace Vendify.Application.Services.Interfaces
             Guid orderId, string paymentReference, Guid storeId);
 
         Task<ApiResponse> CancelOrderAsync(Guid orderId, Guid storeId);
+
     }
+   
 }

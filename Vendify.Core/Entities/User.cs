@@ -18,7 +18,12 @@ namespace Vendify.Core.Entities
         public string? PasswordResetToken { get; set; }
         public DateTime? PasswordResetExpiry { get; set; }
 
-        // Navigation
+        // OTP Verification
+    public string? OtpCode { get; set; }
+    public DateTime? OtpExpiresAt { get; set; }
+    public string? OtpVerificationMethod { get; set; }
+
+    // Navigation
         public Store? Store { get; set; }
         public ICollection<Order> Orders { get; set; } = new List<Order>();
     }

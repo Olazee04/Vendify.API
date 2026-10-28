@@ -24,6 +24,7 @@
         Paid,
         Failed,
         Refunded,
+        Pending,
         PartiallyRefunded
     }
 
@@ -47,7 +48,8 @@
         FlatRate,
         FreeShipping,
         ByWeight,
-        ByLocation
+        ByLocation,
+        Pickup
     }
 
     public enum DiscountType

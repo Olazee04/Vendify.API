@@ -13,6 +13,8 @@ namespace Vendify.Application.DTOs.Shipping
         // e.g. "Lagos", "Abuja", "Nationwide", "International"
 
         public string? Description { get; set; }
+        public string? State { get; set; }
+        public string? City { get; set; }
 
         [Required]
         [Range(0, double.MaxValue)]
@@ -28,6 +30,8 @@ namespace Vendify.Application.DTOs.Shipping
     {
         public string? Name { get; set; }
         public string? Description { get; set; }
+        public string? State { get; set; }
+        public string? City { get; set; }
         public decimal? Fee { get; set; }
         public ShippingType? Type { get; set; }
         public bool? IsActive { get; set; }
@@ -42,6 +46,7 @@ namespace Vendify.Application.DTOs.Shipping
         [Required]
         public string State { get; set; } = string.Empty;
         public string? Country { get; set; } = "Nigeria";
+        public string? City { get; set; }
     }
 
     // ─── RESPONSE DTOs ───────────────────────────────────────
@@ -51,6 +56,8 @@ namespace Vendify.Application.DTOs.Shipping
         public Guid Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
+        public string? State { get; set; }
+        public string? City { get; set; }
         public decimal Fee { get; set; }
         public string Type { get; set; } = string.Empty;
         public bool IsActive { get; set; }
